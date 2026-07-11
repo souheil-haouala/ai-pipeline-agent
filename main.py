@@ -12,14 +12,17 @@ def clean_and_validate_yaml(raw_text):
     """
     clean_text = raw_text.strip()
     
-    if clean_text.startswith("```"):
-        lines = clean_text.splitlines()
-        # Fixed line: target the first string element inside the lines list using [0]
-        if lines and lines[0].startswith("```"):
-            lines.pop(0)
-        if lines and lines[-1].startswith("```"):
-            lines.pop(-1)
-        clean_text = "\n".join(lines).strip()
+    # Senior Strategy: Use standard replacement filters to avoid list index errors
+    if clean_text.startswith("```yaml"):
+        clean_text = clean_text.replace("```yaml", "", 1)
+    elif clean_text.startswith("```"):
+        clean_text = clean_text.replace("```", "", 1)
+        
+    if clean_text.endswith("```"):
+        # Remove the last occurrence of the markdown fence cleanly
+        clean_text = clean_text.rsplit("```", 1)[0]
+        
+    clean_text = clean_text.strip()
         
     try:
         yaml.safe_load(clean_text)
