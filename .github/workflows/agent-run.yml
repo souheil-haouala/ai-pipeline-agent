@@ -3,7 +3,7 @@ name: Execute AI Pipeline Agent
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # Permet de lancer l'agent manuellement en un clic sur GitHub
+  workflow_dispatch:
 
 jobs:
   run-agent:
@@ -13,7 +13,6 @@ jobs:
     - name: Checkout Repository Code
       uses: actions/checkout@v4
 
-     Stein Python Runtime Environment
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
