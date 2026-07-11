@@ -1,4 +1,4 @@
-name: Node.js CI
+name: Python CI
 
 on:
   push:
@@ -9,21 +9,35 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
-        node-version: [18.x, 20.x] # Consider adding more versions or specific LTS versions if needed
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
       with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm' # Caches node modules for faster builds
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip' # Cache pip dependencies
+
     - name: Install dependencies
-      run: npm ci # Use npm ci for clean installs in CI environments
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        # Install test and linting tools if not included in requirements.txt
+        pip install pytest flake8
+
     - name: Run tests
-      run: npm test
-    - name: Build project
-      run: npm run build --if-present # Runs the build script if it exists in package.json
+      run: |
+        pytest
+      env:
+        # Add current directory to python path for module imports, if necessary
+        PYTHONPATH: "."
+
+    - name: Lint with flake8
+      run: |
+        # Fail on errors and complexity/style issues
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --max-complexity=10 --max-line-length=120 --statistics
