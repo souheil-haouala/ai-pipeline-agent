@@ -7,21 +7,14 @@ from detector import scan_workspace
 
 def clean_and_validate_yaml(raw_text):
     """
-    Cleans potential Markdown code fences applied by the AI
-    and strictly validates the structural syntax of the YAML document.
+    Nettoie le texte en retirant les blocs markdown s'ils sont presents
+    et valide la syntaxe YAML de maniere securisee.
     """
     clean_text = raw_text.strip()
     
-    # Senior Strategy: Use standard replacement filters to avoid list index errors
-    if clean_text.startswith("```yaml"):
-        clean_text = clean_text.replace("```yaml", "", 1)
-    elif clean_text.startswith("```"):
-        clean_text = clean_text.replace("```", "", 1)
-        
-    if clean_text.endswith("```"):
-        # Remove the last occurrence of the markdown fence cleanly
-        clean_text = clean_text.rsplit("```", 1)[0]
-        
+    # Methode Senior ultra-fiable : On retire proprement les balises markdown sans risque de plantage
+    clean_text = clean_text.replace("```yaml", "")
+    clean_text = clean_text.replace("```", "")
     clean_text = clean_text.strip()
         
     try:
