@@ -12,9 +12,9 @@ def clean_and_validate_yaml(raw_text):
     """
     clean_text = raw_text.strip()
     
-    # Senior Strategy: Safely isolate array string entries instead of calling string methods on lists
     if clean_text.startswith("```"):
         lines = clean_text.splitlines()
+        # Correction : On verifie explicitement la premiere chaine de la liste
         if lines and lines[0].startswith("```"):
             lines.pop(0)
         if lines and lines[-1].startswith("```"):
