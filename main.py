@@ -3,12 +3,40 @@ import sys
 import yaml
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types  # Import indispensable pour configurer les types de reponse forces
+from jsonschema import validate, ValidationError
 from detector import scan_workspace
+
+# Definition du schema de validation strict pour GitHub Actions
+GITHUB_ACTIONS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "on": {
+            "type": ["string", "array", "object"]
+        },
+        "jobs": {
+            "type": "object",
+            "minProperties": 1
+        }
+    },
+    "required": ["on", "jobs"]
+}
+
+# Securite Cyber : Liste blanche stricte pour interdire les Prompt Injections
+SUPPORTED_STACKS = {
+    "Python": "pip",
+    "Node.js": "npm",
+    "Docker Containerization": "docker",
+    "Go": "go build",
+    "Java": "maven",
+    "Java/Kotlin": "gradle"
+}
 
 def clean_and_validate_yaml(raw_text):
     """
     Nettoie le texte en retirant les blocs markdown s'ils sont presents
-    et valide la syntaxe YAML de maniere securisee.
+    et valide la syntaxe et le schema YAML de maniere securisee.
     """
     clean_text = raw_text.strip()
     
@@ -17,10 +45,18 @@ def clean_and_validate_yaml(raw_text):
     clean_text = clean_text.strip()
         
     try:
-        yaml.safe_load(clean_text)
+        # 1. Validation de la syntaxe de base YAML
+        parsed_yaml = yaml.safe_load(clean_text)
+        
+        # 2. Validation structurelle stricte contre le schema GitHub Actions
+        validate(instance=parsed_yaml, schema=GITHUB_ACTIONS_SCHEMA)
+        
         return clean_text
     except yaml.YAMLError as e:
-        print(f"\n[VALIDATION ERROR] The AI generated invalid YAML syntax: {e}")
+        print(f"\n[SYNTAX ERROR] The AI generated invalid YAML syntax: {e}")
+        return None
+    except ValidationError as e:
+        print(f"\n[SCHEMA ERROR] The AI generated an invalid GitHub Actions structure: {e.message}")
         return None
 
 def run_pipeline_agent():
@@ -42,22 +78,32 @@ def run_pipeline_agent():
         print(f"\n[ERROR] Workspace scanning failed: {e}")
         sys.exit(1)
         
-    if stack == "Generic":
-        print("\n[WARNING] No recognizable project architecture layout found.")
-        print("Aborting autonomous pipeline creation to prevent incorrect generation.")
-        sys.exit(0)
+    # Securite Cyber : Validation anti-injection de prompt par liste blanche
+    if stack not in SUPPORTED_STACKS or SUPPORTED_STACKS[stack] != build_tool:
+        print(f"\n[SECURITY ALERT] Blocked unrecognized environment target: Stack='{stack}', Tool='{build_tool}'")
+        print("Execution aborted to mitigate potential prompt injection vector vulnerabilities.")
+        sys.exit(1)
         
     print(f"\n[SUCCESS] Targeted Environment Verified: {stack} ({build_tool})")
     print("Connecting to Google Gemini API cluster...")
     
     try:
         client = genai.Client()
+        
+        # Methode d'ingenierie avancee : On force le format de sortie JSON structurable au niveau de l'API Google
+        config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.1  # Une valeur basse reduit la creativite et elimine les hallucinations structurelles
+        )
+        
         response = client.models.generate_content(
-            model="gemini-2.5-flash", # Le nom officiel et correct pour le nouveau SDK google-genai
+            model="gemini-2.5-flash",
+            config=config,
             contents=(
-                "You are an expert DevOps engineer. Provide ONLY the raw, valid YAML configuration content "
-                f"for a GitHub Actions workflow (.github/workflows/main.yml) targeting a project built with {stack} "
-                f"using {build_tool}. Do not wrap your response in markdown code blocks like ```yaml or include any chat text."
+                "You are an expert DevOps engineer. Provide a valid GitHub Actions workflow JSON object structure "
+                f"targeting a project built with {stack} using {build_tool}. "
+                "The object structure MUST include 'name', 'on' (the trigger event context string or object), and 'jobs' "
+                "containing the structural deployment workflow orchestration logic."
             ),
         )
         raw_content = response.text
