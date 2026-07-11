@@ -14,7 +14,7 @@ def clean_and_validate_yaml(raw_text):
     
     if clean_text.startswith("```"):
         lines = clean_text.splitlines()
-        # Correction : On verifie explicitement la premiere chaine de la liste
+        # Fixed line: target the first string element inside the lines list using [0]
         if lines and lines[0].startswith("```"):
             lines.pop(0)
         if lines and lines[-1].startswith("```"):
