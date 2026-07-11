@@ -12,7 +12,7 @@ def clean_and_validate_yaml(raw_text):
     """
     clean_text = raw_text.strip()
     
-    # Methode Senior ultra-fiable : On retire proprement les balises markdown sans risque de plantage
+    # Methode Senior : On retire proprement les balises markdown
     clean_text = clean_text.replace("```yaml", "")
     clean_text = clean_text.replace("```", "")
     clean_text = clean_text.strip()
@@ -54,7 +54,7 @@ def run_pipeline_agent():
     try:
         client = genai.Client()
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-1.5-flash",  # Bascule sur le moteur de secours pour eviter la limite 429
             contents=(
                 "You are an expert DevOps engineer. Provide ONLY the raw, valid YAML configuration content "
                 f"for a GitHub Actions workflow (.github/workflows/main.yml) targeting a project built with {stack} "
@@ -91,3 +91,4 @@ def run_pipeline_agent():
 
 if __name__ == "__main__":
     run_pipeline_agent()
+    
