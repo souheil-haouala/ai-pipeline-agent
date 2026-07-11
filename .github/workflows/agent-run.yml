@@ -21,7 +21,7 @@ jobs:
     - name: Install System Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pyyaml python-dotenv google-genai
+        pip install pyyaml python-dotenv google-genai jsonschema
 
     - name: Execute Autonomous Agent Core
       env:
