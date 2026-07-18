@@ -28,10 +28,10 @@ class TestPipelineAgent(unittest.TestCase):
         env_file_path = os.path.join(root_dir, '.env')
         self.assertTrue(os.path.exists(env_file_path), "Missing '.env' configuration file in project root.")
 
-    @patch('builtins.open', new_callable=mock_open, read_data='{"dependencies": {"react": "^18.2.0"}}')
+    @patch('detector.open', new_callable=mock_open, read_data='{"dependencies": {"react": "^18.2.0"}}')
     @patch('os.walk')
     def test_workspace_scanner_skips_ignored_directories(self, mock_walk, mock_file):
-        """Verify that the scanner respects exclusions like node_modules and venv without disk crashes."""
+        """Verify that the scanner respects exclusions like node_modules and venv without framework crashes."""
         mock_walk.return_value = [
             ('.', ['src', 'node_modules', 'venv'], ['package.json', 'requirements.txt']),
             ('./src', [], ['main.py']),
