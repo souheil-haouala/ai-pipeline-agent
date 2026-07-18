@@ -1,1 +1,4 @@
-pytest
+pytestgoogle-genai
+python-dotenv
+pydantic
+flake8
