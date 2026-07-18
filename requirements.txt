@@ -1,6 +1,7 @@
 google-genai
 python-dotenv
 pyyaml
+jsonschema
 pytest
 pyinstaller
 colorama
