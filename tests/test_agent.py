@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 import yaml
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, mock_open
 
 # Dynamic Path Routing
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -28,9 +28,10 @@ class TestPipelineAgent(unittest.TestCase):
         env_file_path = os.path.join(root_dir, '.env')
         self.assertTrue(os.path.exists(env_file_path), "Missing '.env' configuration file in project root.")
 
+    @patch('builtins.open', new_callable=mock_open, read_data='{"dependencies": {"react": "^18.2.0"}}')
     @patch('os.walk')
-    def test_workspace_scanner_skips_ignored_directories(self, mock_walk):
-        """Verify that the scanner respects exclusions like node_modules and venv."""
+    def test_workspace_scanner_skips_ignored_directories(self, mock_walk, mock_file):
+        """Verify that the scanner respects exclusions like node_modules and venv without disk crashes."""
         mock_walk.return_value = [
             ('.', ['src', 'node_modules', 'venv'], ['package.json', 'requirements.txt']),
             ('./src', [], ['main.py']),
