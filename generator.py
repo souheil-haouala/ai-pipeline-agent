@@ -1,14 +1,14 @@
 import os
+import re
 from dotenv import load_dotenv
 from google import genai
-# Import your custom workspace scanner function from detector.py
 from detector import scan_workspace
 
-# Load credentials
+# Explicitly load the variables into the system environment
 load_dotenv()
 
-# Initialize the Gemini Client
-client = genai.Client()
+# Initialize the Gemini Client explicitly pulling the key from os.environ
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Dynamically trigger the live workspace scan!
 scan_result = scan_workspace()
@@ -22,18 +22,21 @@ try:
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=(
-            "You are an expert DevOps engineer. Provide ONLY the raw, valid YAML configuration content "
+            "You are an expert DevOps engineer. Provide the valid YAML configuration content "
             f"for a GitHub Actions workflow (.github/workflows/main.yml) targeting a project built with {detected_stack} "
-            f"using {build_tool}. Do not wrap your response in markdown code blocks like ```yaml or include any chat text."
+            f"using {build_tool}. Provide only the configuration content itself."
         ),
     )
 
-    yaml_content = response.text.strip()
+    raw_output = response.text.strip()
     
+    # Safety Net: Clean out any markdown backticks or block wrappers if appended by the model
+    clean_yaml = re.sub(r"^```(?:yaml)?\n|```$", "", raw_output, flags=re.MULTILINE).strip()
+
     # Write the dynamic asset configuration directly to disk
     os.makedirs(".github/workflows", exist_ok=True)
     with open(".github/workflows/main.yml", "w", encoding="utf-8") as f:
-        f.write(yaml_content)
+        f.write(clean_yaml)
     
     print("\nSuccess! Infrastructure pipeline generated dynamically based on active code parameters.")
 
