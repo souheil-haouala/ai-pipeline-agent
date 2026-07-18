@@ -2,5 +2,4 @@ google-genai
 python-dotenv
 pyyaml
 pytest
-pydantic<2.12
 pyinstaller
