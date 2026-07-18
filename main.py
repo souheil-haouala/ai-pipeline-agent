@@ -1,138 +1,35 @@
-import os
-import sys
-import yaml
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types  # Import indispensable pour configurer les types de reponse forces
-from jsonschema import validate, ValidationError
-from detector import scan_workspace
-
-# Definition du schema de validation strict pour GitHub Actions
-GITHUB_ACTIONS_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "name": {"type": "string"},
-        "on": {
-            "type": ["string", "array", "object"]
-        },
-        "jobs": {
-            "type": "object",
-            "minProperties": 1
-        }
-    },
-    "required": ["on", "jobs"]
-}
-
-# Securite Cyber : Liste blanche stricte pour interdire les Prompt Injections
-SUPPORTED_STACKS = {
-    "Python": "pip",
-    "Node.js": "npm",
-    "Docker Containerization": "docker",
-    "Go": "go build",
-    "Java": "maven",
-    "Java/Kotlin": "gradle"
-}
+import json # Make sure to import json at the top of your main.py
 
 def clean_and_validate_yaml(raw_text):
     """
-    Nettoie le texte en retirant les blocs markdown s'ils sont presents
-    et valide la syntaxe et le schema YAML de maniere securisee.
+    Cleans the forced JSON response text payload from Google Gemini, 
+    validates its structural schema, and outputs perfectly clean, 
+    production-ready YAML configuration text onto disk.
     """
     clean_text = raw_text.strip()
     
+    # Remove markdown code formatting blocks if present
+    clean_text = clean_text.replace("```json", "")
     clean_text = clean_text.replace("```yaml", "")
     clean_text = clean_text.replace("```", "")
     clean_text = clean_text.strip()
         
     try:
-        # 1. Validation de la syntaxe de base YAML
-        parsed_yaml = yaml.safe_load(clean_text)
+        # 1. Parse the forced JSON response data block from the API
+        parsed_json_data = json.loads(clean_text)
         
         # 2. Validation structurelle stricte contre le schema GitHub Actions
-        validate(instance=parsed_yaml, schema=GITHUB_ACTIONS_SCHEMA)
+        validate(instance=parsed_json_data, schema=GITHUB_ACTIONS_SCHEMA)
         
-        return clean_text
-    except yaml.YAMLError as e:
-        print(f"\n[SYNTAX ERROR] The AI generated invalid YAML syntax: {e}")
+        # 3. TRANSITION: Convert the safe validated dictionary into a clean YAML text string 
+        # (sort_keys=False preserves the natural logical sequence order of jobs)
+        final_yaml_text = yaml.safe_dump(parsed_json_data, sort_keys=False, default_flow_style=False)
+        
+        return final_yaml_text
+        
+    except json.JSONDecodeError as e:
+        print(f"\n[SYNTAX ERROR] Failed to parse forced JSON API payload structure: {e}")
         return None
     except ValidationError as e:
         print(f"\n[SCHEMA ERROR] The AI generated an invalid GitHub Actions structure: {e.message}")
         return None
-
-def run_pipeline_agent():
-    print("=" * 60)
-    print("        AI AGENT: AUTOMATED PIPELINE INITIALIZER")
-    print("=" * 60)
-    
-    load_dotenv()
-    if not os.environ.get("GEMINI_API_KEY"):
-        print("\n[ERROR] Missing GEMINI_API_KEY inside your .env file!")
-        print("Please add your Google AI Studio token to proceed safely.")
-        sys.exit(1)
-        
-    try:
-        scan_result = scan_workspace()
-        stack = scan_result["stack"]
-        build_tool = scan_result["build_tool"]
-    except Exception as e:
-        print(f"\n[ERROR] Workspace scanning failed: {e}")
-        sys.exit(1)
-        
-    # Securite Cyber : Validation anti-injection de prompt par liste blanche
-    if stack not in SUPPORTED_STACKS or SUPPORTED_STACKS[stack] != build_tool:
-        print(f"\n[SECURITY ALERT] Blocked unrecognized environment target: Stack='{stack}', Tool='{build_tool}'")
-        print("Execution aborted to mitigate potential prompt injection vector vulnerabilities.")
-        sys.exit(1)
-        
-    print(f"\n[SUCCESS] Targeted Environment Verified: {stack} ({build_tool})")
-    print("Connecting to Google Gemini API cluster...")
-    
-    try:
-        client = genai.Client()
-        
-        # Methode d'ingenierie avancee : On force le format de sortie JSON structurable au niveau de l'API Google
-        config = types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.1  # Une valeur basse reduit la creativite et elimine les hallucinations structurelles
-        )
-        
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            config=config,
-            contents=(
-                "You are an expert DevOps engineer. Provide a valid GitHub Actions workflow JSON object structure "
-                f"targeting a project built with {stack} using {build_tool}. "
-                "The object structure MUST include 'name', 'on' (the trigger event context string or object), and 'jobs' "
-                "containing the structural deployment workflow orchestration logic."
-            ),
-        )
-        raw_content = response.text
-    except Exception as e:
-        print(f"\n[ERROR] Cloud LLM communication failed: {e}")
-        print("Please check your internet connection or API credit limits.")
-        sys.exit(1)
-        
-    print("Executing structural safety checks on AI response...")
-    validated_yaml = clean_and_validate_yaml(raw_content)
-    
-    if not validated_yaml:
-        print("[CRITICAL] Process aborted: Output pipeline blueprint is structurally unstable.")
-        sys.exit(1)
-        
-    try:
-        os.makedirs(os.path.join(".github", "workflows"), exist_ok=True)
-        workflow_path = os.path.join(".github", "workflows", "main.yml")
-        with open(workflow_path, "w", encoding="utf-8") as f:
-            f.write(validated_yaml)
-        
-        print("\n" + "=" * 60)
-        print(f"[SUCCESS] CI/CD Pipeline compiled and saved successfully!")
-        print(f"Location: {workflow_path}")
-        print("=" * 60)
-        
-    except IOError as e:
-        print(f"\n[ERROR] Failed to write system files to disk: {e}")
-        sys.exit(1)
-
-if __name__ == "__main__":
-    run_pipeline_agent()

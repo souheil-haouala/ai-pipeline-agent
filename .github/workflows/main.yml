@@ -1,0 +1,52 @@
+{
+  "name": "Python CI/CD with Pip",
+  "on": {
+    "push": {
+      "branches": [
+        "main",
+        "develop"
+      ]
+    },
+    "pull_request": {
+      "branches": [
+        "main",
+        "develop"
+      ]
+    },
+    "workflow_dispatch": {}
+  },
+  "jobs": {
+    "build-and-test": {
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {
+          "name": "Checkout repository",
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "name": "Set up Python",
+          "uses": "actions/setup-python@v5",
+          "with": {
+            "python-version": "3.9"
+          }
+        },
+        {
+          "name": "Upgrade pip",
+          "run": "python -m pip install --upgrade pip"
+        },
+        {
+          "name": "Install dependencies",
+          "run": "pip install -r requirements.txt"
+        },
+        {
+          "name": "Run tests",
+          "run": "pytest"
+        },
+        {
+          "name": "Run linter (Flake8)",
+          "run": "flake8 ."
+        }
+      ]
+    }
+  }
+}
