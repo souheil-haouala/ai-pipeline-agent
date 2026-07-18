@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 import yaml
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, mock_open
 
 # Dynamic Path Routing
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -28,10 +28,10 @@ class TestPipelineAgent(unittest.TestCase):
         env_file_path = os.path.join(root_dir, '.env')
         self.assertTrue(os.path.exists(env_file_path), "Missing '.env' configuration file in project root.")
 
-    @patch('builtins.open', create=True)
+    @patch('builtins.open', new_callable=mock_open, read_data='{"dependencies": {"react": "^18.2.0"}}')
     @patch('os.path.exists')
     @patch('os.walk')
-    def test_workspace_scanner_skips_ignored_directories(self, mock_walk, mock_exists, mock_open):
+    def test_workspace_scanner_skips_ignored_directories(self, mock_walk, mock_exists, mock_file_open):
         """Verify that the scanner respects exclusions like node_modules and venv without disk crashes."""
         # 1. Setup mocked directory path crawling data stream
         mock_walk.return_value = [
@@ -43,17 +43,10 @@ class TestPipelineAgent(unittest.TestCase):
         
         # 2. Force os.path.exists to confirm our package configuration path exists during test matrix runs
         mock_exists.side_effect = lambda path: "package.json" in path.lower()
-        
-        # 3. Inject simulated package JSON dependency configurations structure text directly
-        mock_file_context = MagicMock()
-        mock_file_context.__enter__.return_value = MagicMock(
-            read=lambda: '{"dependencies": {"react": "^18.2.0"}}'
-        )
-        mock_open.return_value = mock_file_context
 
         result = scan_workspace()
         
-        # 4. Assertions: Confirm it evaluates as a valid Node framework application
+        # 3. Assertions: Confirm it evaluates as a valid Node framework application using the mocked JSON content
         self.assertIsInstance(result, dict)
         self.assertEqual(result["stack"], "React Frontend")
         self.assertEqual(result["build_tool"], "npm run build")
