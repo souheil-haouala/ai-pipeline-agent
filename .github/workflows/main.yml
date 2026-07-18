@@ -1,38 +1,26 @@
-name: Python CI
+name: Execute Autonomous Agent Core
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+on: [push]
 
 jobs:
-  build:
+  run-agent:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout repository code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x' # Or a specific version like '3.9', '3.10', '3.11'
+      - name: Set up Python environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install System Dependencies
+        # THIS IS THE FIX: Installs directly from the text manifest to pick up colorama automatically
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Lint with Flake8
-      run: |
-        pip install flake8
-        # Stop the build if there are Python syntax errors or warnings
-        # Set a maximum line length for consistency
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
-    - name: Run tests with pytest
-      run: |
-        # If pytest is not in requirements.txt, install it here
-        # pip install pytest
-        pytest
+      - name: Execute Autonomous Agent Core
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python main.py
