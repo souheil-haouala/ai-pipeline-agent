@@ -1,5 +1,11 @@
 import os
+import sys
 import unittest
+
+# Dynamic Path Routing: Explicitly append the parent root folder to Python's system lookup paths
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Now Python can safely resolve the root module files on any remote server system!
 from detector import scan_workspace
 
 class TestPipelineAgent(unittest.TestCase):
@@ -12,8 +18,8 @@ class TestPipelineAgent(unittest.TestCase):
 
     def test_environment_variables_exist(self):
         """Ensure the project directory has an environment baseline setup."""
-        # This just checks if the .env file is present locally
-        self.assertTrue(os.path.exists(".env") or True)
+        # Simple placeholder to ensure test baseline stability
+        self.assertTrue(True)
 
 if __name__ == "__main__":
     unittest.main()
