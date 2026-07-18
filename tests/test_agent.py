@@ -65,6 +65,7 @@ class TestPipelineAgent(unittest.TestCase):
 
         raw_output = mock_response.text.strip()
         
+        # Match the generator's safe non-regex line processing structure
         clean_lines = []
         for line in raw_output.splitlines():
             if line.strip().startswith("```"):

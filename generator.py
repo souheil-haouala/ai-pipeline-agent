@@ -23,13 +23,13 @@ try:
         contents=(
             "You are an expert DevOps engineer. Provide the valid YAML configuration content "
             f"for a GitHub Actions workflow (.github/workflows/main.yml) targeting a project built with {detected_stack} "
-            f"using {build_tool}. Provide only the configuration content itself. Do not include markdown wraps."
+            f"using {build_tool}. Provide only the configuration content itself."
         ),
     )
 
     raw_output = response.text.strip()
     
-    # Structural Clean: Strip out backtick lines completely
+    # Structural Clean: Strip out backtick lines completely without regex bugs
     clean_lines = []
     for line in raw_output.splitlines():
         if line.strip().startswith("```"):
