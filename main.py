@@ -62,6 +62,9 @@ def print_success(message):
 def print_error(message):
     print(f"{Fore.RED}[{Fore.WHITE}✗{Fore.RED}] {Fore.RED}{Style.BRIGHT}{message}", file=sys.stderr)
 
+def print_warning(message):
+    print(f"{Fore.YELLOW}[{Fore.WHITE}!{Fore.YELLOW}] {Fore.YELLOW}{Style.BRIGHT}{message}")
+
 def validate_and_convert_to_yaml(raw_json_text):
     """Validates structural AI JSON output and converts it cleanly to standard YAML."""
     try:
@@ -97,7 +100,7 @@ def run_pipeline_agent():
     if stack == "Node.js Application" and build_tool in ["yarn", "pnpm"]:
         stack = f"Node.js Application ({build_tool})"
     elif stack in ["React Frontend", "Next.js Framework"] and ("yarn" in build_tool or "pnpm" in build_tool):
-        tool_name = build_tool.split()[0]
+        tool_name = build_tool.split()
         stack = f"{stack} ({tool_name})"
 
     if os.environ.get("GITHUB_ACTIONS") == "true":
@@ -110,30 +113,57 @@ def run_pipeline_agent():
         sys.exit(1)
         
     print_success(f"Ecosystem Verified: {stack} via {build_tool}")
-    print_step("Opening handshake socket connection to Google Gemini API cluster")
     
-    try:
-        client = genai.Client()
-        config = types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.1
-        )
-        
-        prompt = (
-            "You are an expert DevOps engineer. Provide a valid GitHub Actions workflow schema formatted as a JSON object "
-            f"targeting a project built with {stack} using '{build_tool}'. "
-            "The JSON object MUST strictly use standard GitHub actions keys like 'name', 'on', and 'jobs'. "
-            "Ensure the jobs contain operational verification steps matching this ecosystem."
-        )
-        
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            config=config,
-            contents=prompt,
-        )
-        raw_content = response.text
-    except Exception as e:
-        print_error(f"Cloud server socket connection dropped: {e}")
+    max_retries = 3
+    retry_delay = 5  # Initial cooldown delay in seconds
+    raw_content = None
+    
+    for attempt in range(1, max_retries + 1):
+        print_step(f"Opening handshake socket connection to Google Gemini API cluster (Attempt {attempt}/{max_retries})")
+        try:
+            client = genai.Client()
+            config = types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.1
+            )
+            
+            prompt = (
+                "You are an expert DevOps engineer. Provide a valid GitHub Actions workflow schema formatted as a JSON object "
+                f"targeting a project built with {stack} using '{build_tool}'. "
+                "The JSON object MUST strictly use standard GitHub actions keys like 'name', 'on', and 'jobs'. "
+                "Ensure the jobs contain operational verification steps matching this ecosystem."
+            )
+            
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                config=config,
+                contents=prompt,
+            )
+            raw_content = response.text
+            break  # Break out of the loop if successful!
+            
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                if attempt < max_retries:
+                    print_warning(f"Rate limit hit (429). Initiating automatic cooldown backoff...")
+                    # Stylized visual countdown loop in the console
+                    for remaining in range(retry_delay, 0, -1):
+                        sys.stdout.write(f"\r{Fore.YELLOW}[!] Retrying network operation in {remaining}s... ")
+                        sys.stdout.flush()
+                        time.sleep(1)
+                    print()  # Shift to a clean line break
+                    retry_delay *= 2  # Exponential backoff multiplier
+                    continue
+                else:
+                    print_error(f"Daily quota completely exhausted or limit ceiling reached: {e}")
+                    sys.exit(1)
+            else:
+                print_error(f"Cloud server socket connection dropped: {e}")
+                sys.exit(1)
+                
+    if not raw_content:
+        print_error("Process terminated: Failed to collect execution parameters from the LLM.")
         sys.exit(1)
         
     print_step("Executing schema conformance audit and structural formatting validation")
