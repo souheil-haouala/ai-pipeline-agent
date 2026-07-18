@@ -1,10 +1,9 @@
 import os
-import re
 from dotenv import load_dotenv
 from google import genai
 from detector import scan_workspace
 
-# Explicitly load the variables into the system environment
+# Load credentials
 load_dotenv()
 
 # Initialize the Gemini Client explicitly pulling the key from os.environ
@@ -30,8 +29,10 @@ try:
 
     raw_output = response.text.strip()
     
-    # Safety Net: Clean out any markdown backticks or block wrappers if appended by the model
-    clean_yaml = re.sub(r"^```(?:yaml)?\n|```$", "", raw_output, flags=re.MULTILINE).strip()
+    # Split by backticks line-by-line to extract the clean inner YAML data
+    lines = raw_output.split("\n")
+    clean_lines = [line for line in lines if not line.strip().startswith("```")]
+    clean_yaml = "\n".join(clean_lines).strip()
 
     # Write the dynamic asset configuration directly to disk
     os.makedirs(".github/workflows", exist_ok=True)
