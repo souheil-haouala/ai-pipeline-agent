@@ -26,7 +26,20 @@ GITHUB_ACTIONS_SCHEMA = {
 # Securite Cyber : Liste blanche stricte pour interdire les Prompt Injections
 SUPPORTED_STACKS = {
     "Python": "pip",
+    "Python (Scripting)": "python",
     "Node.js": "npm",
+    "Node.js Application": "npm",
+    "Node.js Application (yarn)": "yarn",
+    "Node.js Application (pnpm)": "pnpm",
+    "React Frontend": "npm run build",
+    "React Frontend (yarn)": "yarn run build",
+    "React Frontend (pnpm)": "pnpm run build",
+    "Next.js Framework": "npm run build",
+    "Next.js Framework (yarn)": "yarn run build",
+    "Next.js Framework (pnpm)": "pnpm run build",
+    "Vue Frontend": "npm run build",
+    "Angular Frontend": "npm run build",
+    "Nuxt Framework": "npm run build",
     "Docker Containerization": "docker",
     "Go": "go build",
     "Java": "maven",
@@ -78,6 +91,14 @@ def run_pipeline_agent():
         print(f"\n[ERROR] Workspace scanning failed: {e}")
         sys.exit(1)
         
+    # Check if a custom lock tool structure altered the build string mapping values
+    # (Accounts for cross-compatible framework formats seamlessly)
+    if stack == "Node.js Application" and build_tool in ["yarn", "pnpm"]:
+        stack = f"Node.js Application ({build_tool})"
+    elif stack in ["React Frontend", "Next.js Framework"] and ("yarn" in build_tool or "pnpm" in build_tool):
+        current_tool = build_tool.split()[0]
+        stack = f"{stack} ({current_tool})"
+
     # Securite Cyber : Validation anti-injection de prompt par liste blanche
     if stack not in SUPPORTED_STACKS or SUPPORTED_STACKS[stack] != build_tool:
         print(f"\n[SECURITY ALERT] Blocked unrecognized environment target: Stack='{stack}', Tool='{build_tool}'")
@@ -90,10 +111,10 @@ def run_pipeline_agent():
     try:
         client = genai.Client()
         
-        # Methode d'ingenierie avancee : On force le format de sortie JSON structurable au niveau de l'API Google
+        # Dynamic response mapping setup
         config = types.GenerateContentConfig(
             response_mime_type="application/json",
-            temperature=0.1  # Une valeur basse reduit la creativite et elimine les hallucinations structurelles
+            temperature=0.1
         )
         
         response = client.models.generate_content(
