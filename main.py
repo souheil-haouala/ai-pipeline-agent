@@ -144,9 +144,10 @@ def run_pipeline_agent():
             
         except Exception as e:
             error_str = str(e)
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+            # COOLDOWN PATCH: Handles both 429 quota exhaustion and 503 server overloads smoothly
+            if any(marker in error_str for marker in ["429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE"]):
                 if attempt < max_retries:
-                    print_warning(f"Rate limit hit (429). Initiating automatic cooldown backoff...")
+                    print_warning(f"Network congestion or rate limit hit. Initiating automatic cooldown backoff...")
                     # Stylized visual countdown loop in the console
                     for remaining in range(retry_delay, 0, -1):
                         sys.stdout.write(f"\r{Fore.YELLOW}[!] Retrying network operation in {remaining}s... ")
@@ -156,7 +157,7 @@ def run_pipeline_agent():
                     retry_delay *= 2  # Exponential backoff multiplier
                     continue
                 else:
-                    print_error(f"Daily quota completely exhausted or limit ceiling reached: {e}")
+                    print_error(f"API server thresholds or limitations reached after max retries: {e}")
                     sys.exit(1)
             else:
                 print_error(f"Cloud server socket connection dropped: {e}")
