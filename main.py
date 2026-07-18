@@ -3,18 +3,16 @@ import sys
 import yaml
 from dotenv import load_dotenv
 from google import genai
-from google.genai import types  # Import indispensable pour configurer les types de reponse forces
+from google.genai import types  
 from jsonschema import validate, ValidationError
 from detector import scan_workspace
 
-# Definition du schema de validation strict pour GitHub Actions
+# Définition d'un schéma de validation plus robuste
 GITHUB_ACTIONS_SCHEMA = {
     "type": "object",
     "properties": {
         "name": {"type": "string"},
-        "on": {
-            "type": ["string", "array", "object"]
-        },
+        "on": {"type": ["string", "array", "object"]},
         "jobs": {
             "type": "object",
             "minProperties": 1
@@ -23,7 +21,6 @@ GITHUB_ACTIONS_SCHEMA = {
     "required": ["on", "jobs"]
 }
 
-# Securite Cyber : Liste blanche stricte pour interdire les Prompt Injections
 SUPPORTED_STACKS = {
     "Python": "pip",
     "Python (Scripting)": "python",
@@ -46,30 +43,26 @@ SUPPORTED_STACKS = {
     "Java/Kotlin": "gradle"
 }
 
-def clean_and_validate_yaml(raw_text):
+def validate_and_convert_to_yaml(raw_json_text):
     """
-    Nettoie le texte en retirant les blocs markdown s'ils sont presents
-    et valide la syntaxe et le schema YAML de maniere securisee.
+    Valide le JSON de l'IA par rapport au schéma structurel, 
+    puis le convertit en une chaîne YAML propre.
     """
-    clean_text = raw_text.strip()
-    
-    clean_text = clean_text.replace("```yaml", "")
-    clean_text = clean_text.replace("```", "")
-    clean_text = clean_text.strip()
-        
     try:
-        # 1. Validation de la syntaxe de base YAML
-        parsed_yaml = yaml.safe_load(clean_text)
+        # 1. Chargement sécurisé du JSON natif renvoyé par Gemini
+        parsed_data = yaml.safe_load(raw_json_text)
         
-        # 2. Validation structurelle stricte contre le schema GitHub Actions
-        validate(instance=parsed_yaml, schema=GITHUB_ACTIONS_SCHEMA)
+        # 2. Validation structurelle stricte
+        validate(instance=parsed_data, schema=GITHUB_ACTIONS_SCHEMA)
         
-        return clean_text
-    except yaml.YAMLError as e:
-        print(f"\n[SYNTAX ERROR] The AI generated invalid YAML syntax: {e}")
+        # 3. Conversion propre en format YAML standard
+        clean_yaml = yaml.dump(parsed_data, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        return clean_yaml
+    except (yaml.YAMLError, ValueError, TypeError) as e:
+        print(f"\n[SYNTAX ERROR] The AI generated invalid JSON/YAML structure: {e}")
         return None
     except ValidationError as e:
-        print(f"\n[SCHEMA ERROR] The AI generated an invalid GitHub Actions structure: {e.message}")
+        print(f"\n[SCHEMA ERROR] Invalid GitHub Actions structure: {e.message}")
         return None
 
 def run_pipeline_agent():
@@ -80,7 +73,6 @@ def run_pipeline_agent():
     load_dotenv()
     if not os.environ.get("GEMINI_API_KEY") and not os.environ.get("GITHUB_ACTIONS"):
         print("\n[ERROR] Missing GEMINI_API_KEY inside your .env file!")
-        print("Please add your Google AI Studio token to proceed safely.")
         sys.exit(1)
         
     try:
@@ -91,23 +83,20 @@ def run_pipeline_agent():
         print(f"\n[ERROR] Workspace scanning failed: {e}")
         sys.exit(1)
         
-    # Check if a custom lock tool structure altered the build string mapping values
+    # CORRECTION : Align target mapping modifications without dropping build string syntax dependencies
     if stack == "Node.js Application" and build_tool in ["yarn", "pnpm"]:
         stack = f"Node.js Application ({build_tool})"
     elif stack in ["React Frontend", "Next.js Framework"] and ("yarn" in build_tool or "pnpm" in build_tool):
-        current_tool = build_tool.split()
-        stack = f"{stack} ({current_tool})"
+        tool_name = build_tool.split()[0]
+        stack = f"{stack} ({tool_name})"
 
-    # FIX: If running inside a headless GitHub CI/CD container, override the environment block
     if os.environ.get("GITHUB_ACTIONS") == "true":
         print(f"\n[CI/CD Context Override] Running in clean cloud environment container.")
         stack = "Python"
         build_tool = "pip"
 
-    # Securite Cyber : Validation anti-injection de prompt par liste blanche
     if stack not in SUPPORTED_STACKS or SUPPORTED_STACKS[stack] != build_tool:
         print(f"\n[SECURITY ALERT] Blocked unrecognized environment target: Stack='{stack}', Tool='{build_tool}'")
-        print("Execution aborted to mitigate potential prompt injection vector vulnerabilities.")
         sys.exit(1)
         
     print(f"\n[SUCCESS] Targeted Environment Verified: {stack} ({build_tool})")
@@ -116,30 +105,31 @@ def run_pipeline_agent():
     try:
         client = genai.Client()
         
-        # Methode d'ingenierie avancee : On force le format de sortie JSON structurable au niveau de l'API Google
+        # Configuration pass matching the official google-genai structural schema rules
         config = types.GenerateContentConfig(
             response_mime_type="application/json",
-            temperature=0.1  # Une valeur basse reduit la creativite et elimine les hallucinations structurelles
+            temperature=0.1
+        )
+        
+        prompt = (
+            "You are an expert DevOps engineer. Provide a valid GitHub Actions workflow schema formatted as a JSON object "
+            f"targeting a project built with {stack} using '{build_tool}'. "
+            "The JSON object MUST strictly use standard GitHub actions keys like 'name', 'on', and 'jobs'. "
+            "Ensure the jobs contain operational verification steps (e.g. linter, tests, or build steps) matching this ecosystem."
         )
         
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             config=config,
-            contents=(
-                "You are an expert DevOps engineer. Provide a valid GitHub Actions workflow JSON object structure "
-                f"targeting a project built with {stack} using {build_tool}. "
-                "The object structure MUST include 'name', 'on' (the trigger event context string or object), and 'jobs' "
-                "containing the structural deployment workflow orchestration logic."
-            ),
+            contents=prompt,
         )
         raw_content = response.text
     except Exception as e:
         print(f"\n[ERROR] Cloud LLM communication failed: {e}")
-        print("Please check your internet connection or API credit limits.")
         sys.exit(1)
         
-    print("Executing structural safety checks on AI response...")
-    validated_yaml = clean_and_validate_yaml(raw_content)
+    print("Executing structural safety and format conversion checks...")
+    validated_yaml = validate_and_convert_to_yaml(raw_content)
     
     if not validated_yaml:
         print("[CRITICAL] Process aborted: Output pipeline blueprint is structurally unstable.")
