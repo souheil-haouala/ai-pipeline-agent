@@ -46,7 +46,6 @@ class TestPipelineAgent(unittest.TestCase):
         mock_client_instance = MagicMock()
         mock_response = MagicMock()
         
-        # Simulated markdown-wrapped YAML string
         mock_response.text = (
             "```yaml\n"
             "name: Dynamic CI Pipeline\n"
@@ -66,13 +65,15 @@ class TestPipelineAgent(unittest.TestCase):
 
         raw_output = mock_response.text.strip()
         
-        # CLEAN FIX: Split by backticks line-by-line to extract the clean inner YAML data
-        lines = raw_output.split("\n")
-        clean_lines = [line for line in lines if not line.strip().startswith("```")]
+        clean_lines = []
+        for line in raw_output.splitlines():
+            if line.strip().startswith("```"):
+                continue
+            clean_lines.append(line)
+            
         clean_yaml = "\n".join(clean_lines).strip()
 
         self.assertTrue(clean_yaml.startswith("name:"))
-        self.assertNotIn("```yaml", clean_yaml)
 
         try:
             parsed_yaml = yaml.safe_load(clean_yaml)

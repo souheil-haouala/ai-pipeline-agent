@@ -23,15 +23,19 @@ try:
         contents=(
             "You are an expert DevOps engineer. Provide the valid YAML configuration content "
             f"for a GitHub Actions workflow (.github/workflows/main.yml) targeting a project built with {detected_stack} "
-            f"using {build_tool}. Provide only the configuration content itself."
+            f"using {build_tool}. Provide only the configuration content itself. Do not include markdown wraps."
         ),
     )
 
     raw_output = response.text.strip()
     
-    # Split by backticks line-by-line to extract the clean inner YAML data
-    lines = raw_output.split("\n")
-    clean_lines = [line for line in lines if not line.strip().startswith("```")]
+    # Structural Clean: Strip out backtick lines completely
+    clean_lines = []
+    for line in raw_output.splitlines():
+        if line.strip().startswith("```"):
+            continue
+        clean_lines.append(line)
+        
     clean_yaml = "\n".join(clean_lines).strip()
 
     # Write the dynamic asset configuration directly to disk
