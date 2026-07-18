@@ -1,16 +1,15 @@
 import os
 from dotenv import load_dotenv
 from google import genai
-# Import your custom workspace scanner function from detector.py
+
 from detector import scan_workspace
 
-# Load credentials
 load_dotenv()
 
-# Initialize the Gemini Client
+
 client = genai.Client()
 
-# Dynamically trigger the live workspace scan!
+
 scan_result = scan_workspace()
 detected_stack = scan_result["stack"]
 build_tool = scan_result["build_tool"]
@@ -30,7 +29,7 @@ try:
 
     yaml_content = response.text.strip()
     
-    # Write the dynamic asset configuration directly to disk
+    
     os.makedirs(".github/workflows", exist_ok=True)
     with open(".github/workflows/main.yml", "w", encoding="utf-8") as f:
         f.write(yaml_content)
