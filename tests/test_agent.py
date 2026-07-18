@@ -1,15 +1,16 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch
+import yaml
+from unittest.mock import patch, MagicMock
 
-# Dynamic Path Routing: Explicitly append the parent root folder to Python's system lookup paths
+# Dynamic Path Routing
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Now Python can safely resolve the root module files on any remote server system!
 from detector import scan_workspace
 
 class TestPipelineAgent(unittest.TestCase):
+
     def test_workspace_scanner_returns_dict(self):
         """Verify the updated recursive scanner returns a valid system state dictionary."""
         result = scan_workspace()
@@ -19,15 +20,12 @@ class TestPipelineAgent(unittest.TestCase):
 
     def test_environment_variables_exist(self):
         """Ensure the project directory contains the critical environment setup file."""
-        # If running inside GitHub Actions, bypass the physical check since secrets are injected dynamically
         if os.environ.get("GITHUB_ACTIONS") == "true":
             self.assertTrue(True)
             return
 
         root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         env_file_path = os.path.join(root_dir, '.env')
-        
-        # Verify that the physical .env configuration file exists in your project root locally
         self.assertTrue(os.path.exists(env_file_path), "Missing '.env' configuration file in project root.")
 
     @patch('os.walk')
@@ -39,9 +37,49 @@ class TestPipelineAgent(unittest.TestCase):
             ('./node_modules', [], ['package.json']),
             ('./venv', [], ['pip-selfcheck.json'])
         ]
-        
         result = scan_workspace()
         self.assertIsInstance(result, dict)
+
+    @patch('google.genai.Client')
+    def test_generator_api_mocking_and_yaml_integrity(self, mock_genai_client):
+        """Mock the live Gemini API network call and validate the structural integrity of the generated YAML."""
+        mock_client_instance = MagicMock()
+        mock_response = MagicMock()
+        
+        # Simulated markdown-wrapped YAML string
+        mock_response.text = (
+            "```yaml\n"
+            "name: Dynamic CI Pipeline\n"
+            "on: [push]\n"
+            "jobs:\n"
+            "  build:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - uses: actions/checkout@v4\n"
+            "      - name: Set up Python\n"
+            "        uses: actions/setup-python@v5\n"
+            "```"
+        )
+        
+        mock_client_instance.models.generate_content.return_value = mock_response
+        mock_genai_client.return_value = mock_client_instance
+
+        raw_output = mock_response.text.strip()
+        
+        # CLEAN FIX: Split by backticks line-by-line to extract the clean inner YAML data
+        lines = raw_output.split("\n")
+        clean_lines = [line for line in lines if not line.strip().startswith("```")]
+        clean_yaml = "\n".join(clean_lines).strip()
+
+        self.assertTrue(clean_yaml.startswith("name:"))
+        self.assertNotIn("```yaml", clean_yaml)
+
+        try:
+            parsed_yaml = yaml.safe_load(clean_yaml)
+            self.assertEqual(parsed_yaml["name"], "Dynamic CI Pipeline")
+            self.assertIn("jobs", parsed_yaml)
+        except yaml.YAMLError as exc:
+            self.fail(f"Gemini API returned structurally invalid YAML layout: {exc}")
 
 if __name__ == "__main__":
     unittest.main()
