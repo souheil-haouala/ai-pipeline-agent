@@ -1,4 +1,4 @@
-name: Execute Autonomous Agent Core
+﻿name: Execute Autonomous Agent Core
 
 on: [push]
 
@@ -15,7 +15,6 @@ jobs:
           python-version: '3.11'
 
       - name: Install System Dependencies
-        # THIS IS THE FIX: Installs directly from the text manifest to pick up colorama automatically
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
