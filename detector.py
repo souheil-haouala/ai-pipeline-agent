@@ -19,8 +19,16 @@ def scan_workspace():
             
         for file in files:
             file_lower = file.lower()
-            # Store the full relative file path mapped to its lower name for target reading
-            found_files[file_lower] = os.path.join(root, file)
+            current_full_path = os.path.join(root, file)
+            
+            # CORRECTION: Standardize depth assessment using path depth counts to prevent uneven string length bugs
+            if file_lower not in found_files:
+                found_files[file_lower] = current_full_path
+            else:
+                existing_depth = found_files[file_lower].count(os.sep)
+                current_depth = current_full_path.count(os.sep)
+                if current_depth < existing_depth:
+                    found_files[file_lower] = current_full_path
             
             if file_lower.endswith(".py"):
                 has_python_files = True
@@ -33,7 +41,9 @@ def scan_workspace():
         elif "yarn.lock" in found_files:
             build_tool = "yarn"
 
-        # Safely open package.json ONLY if the file actually exists on the disk
+        # Sauvegarde de la base de l'outil (npm, pnpm ou yarn) avant d'ajouter "run build"
+        base_tool = build_tool
+
         package_json_path = found_files["package.json"]
         if os.path.exists(package_json_path):
             try:
@@ -42,19 +52,19 @@ def scan_workspace():
                     dependencies = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
                     
                     if "next" in dependencies:
-                        return {"stack": "Next.js Framework", "build_tool": f"{build_tool} run build"}
+                        return {"stack": "Next.js Framework", "build_tool": f"{base_tool} run build"}
                     if "react" in dependencies:
-                        return {"stack": "React Frontend", "build_tool": f"{build_tool} run build"}
+                        return {"stack": "React Frontend", "build_tool": f"{base_tool} run build"}
                     if "vue" in dependencies:
-                        return {"stack": "Vue Frontend", "build_tool": f"{build_tool} run build"}
+                        return {"stack": "Vue Frontend", "build_tool": f"{base_tool} run build"}
                     if "@angular/core" in dependencies:
-                        return {"stack": "Angular Frontend", "build_tool": f"{build_tool} run build"}
+                        return {"stack": "Angular Frontend", "build_tool": f"{base_tool} run build"}
                     if "nuxt" in dependencies:
-                        return {"stack": "Nuxt Framework", "build_tool": f"{build_tool} run build"}
+                        return {"stack": "Nuxt Framework", "build_tool": f"{base_tool} run build"}
             except Exception:
                 pass # Fallback to standard Node if JSON parsing crashes
 
-        return {"stack": "Node.js Application", "build_tool": build_tool}
+        return {"stack": "Node.js Application", "build_tool": base_tool}
 
     # 2. Check for Docker environments
     if "dockerfile" in found_files or "docker-compose.yml" in found_files or "docker-compose.yaml" in found_files:
