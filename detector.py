@@ -33,24 +33,26 @@ def scan_workspace():
         elif "yarn.lock" in found_files:
             build_tool = "yarn"
 
-        # Read package.json to catch specific frontend libraries
-        try:
-            with open(found_files["package.json"], "r", encoding="utf-8") as f:
-                data = json.load(f)
-                dependencies = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
-                
-                if "next" in dependencies:
-                    return {"stack": "Next.js Framework", "build_tool": f"{build_tool} run build"}
-                if "react" in dependencies:
-                    return {"stack": "React Frontend", "build_tool": f"{build_tool} run build"}
-                if "vue" in dependencies:
-                    return {"stack": "Vue Frontend", "build_tool": f"{build_tool} run build"}
-                if "@angular/core" in dependencies:
-                    return {"stack": "Angular Frontend", "build_tool": f"{build_tool} run build"}
-                if "nuxt" in dependencies:
-                    return {"stack": "Nuxt Framework", "build_tool": f"{build_tool} run build"}
-        except Exception:
-            pass # Fallback to standard Node if JSON parsing crashes
+        # Safely open package.json ONLY if the file actually exists on the disk
+        package_json_path = found_files["package.json"]
+        if os.path.exists(package_json_path):
+            try:
+                with open(package_json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    dependencies = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
+                    
+                    if "next" in dependencies:
+                        return {"stack": "Next.js Framework", "build_tool": f"{build_tool} run build"}
+                    if "react" in dependencies:
+                        return {"stack": "React Frontend", "build_tool": f"{build_tool} run build"}
+                    if "vue" in dependencies:
+                        return {"stack": "Vue Frontend", "build_tool": f"{build_tool} run build"}
+                    if "@angular/core" in dependencies:
+                        return {"stack": "Angular Frontend", "build_tool": f"{build_tool} run build"}
+                    if "nuxt" in dependencies:
+                        return {"stack": "Nuxt Framework", "build_tool": f"{build_tool} run build"}
+            except Exception:
+                pass # Fallback to standard Node if JSON parsing crashes
 
         return {"stack": "Node.js Application", "build_tool": build_tool}
 
