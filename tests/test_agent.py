@@ -28,17 +28,35 @@ class TestPipelineAgent(unittest.TestCase):
         env_file_path = os.path.join(root_dir, '.env')
         self.assertTrue(os.path.exists(env_file_path), "Missing '.env' configuration file in project root.")
 
+    @patch('builtins.open', create=True)
+    @patch('os.path.exists')
     @patch('os.walk')
-    def test_workspace_scanner_skips_ignored_directories(self, mock_walk):
+    def test_workspace_scanner_skips_ignored_directories(self, mock_walk, mock_exists, mock_open):
         """Verify that the scanner respects exclusions like node_modules and venv without disk crashes."""
+        # 1. Setup mocked directory path crawling data stream
         mock_walk.return_value = [
             ('.', ['src', 'node_modules', 'venv'], ['package.json', 'requirements.txt']),
             ('./src', [], ['main.py']),
             ('./node_modules', [], ['package.json']),
             ('./venv', [], ['pip-selfcheck.json'])
         ]
+        
+        # 2. Force os.path.exists to confirm our package configuration path exists during test matrix runs
+        mock_exists.side_effect = lambda path: "package.json" in path.lower()
+        
+        # 3. Inject simulated package JSON dependency configurations structure text directly
+        mock_file_context = MagicMock()
+        mock_file_context.__enter__.return_value = MagicMock(
+            read=lambda: '{"dependencies": {"react": "^18.2.0"}}'
+        )
+        mock_open.return_value = mock_file_context
+
         result = scan_workspace()
+        
+        # 4. Assertions: Confirm it evaluates as a valid Node framework application
         self.assertIsInstance(result, dict)
+        self.assertEqual(result["stack"], "React Frontend")
+        self.assertEqual(result["build_tool"], "npm run build")
 
     @patch('google.genai.Client')
     def test_generator_api_mocking_and_yaml_integrity(self, mock_genai_client):
