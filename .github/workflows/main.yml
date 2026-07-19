@@ -35,15 +35,15 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
-        cache: npm
+        # Le cache npm a été retiré ici pour éviter de chercher un package-lock.json inexistant
     - name: Install Dependencies
-      run: npm ci --legacy-peer-deps
+      run: npm install --legacy-peer-deps  # Remplacement de 'npm ci' par 'npm install'
     - name: Run Linter
       run: npm run lint
     - name: Run Tests
       run: npm test
     - name: Run Build (if applicable)
-      id: build                             # <-- Ajout de l'ID ici pour lier l'étape
+      id: build
       run: npm run build
     - name: Perform Security Audit
       run: npm audit --audit-level=high
