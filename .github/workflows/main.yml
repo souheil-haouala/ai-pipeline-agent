@@ -1,4 +1,4 @@
-﻿name: Node.js Application CI/CD Workflow
+﻿name: Python Application CI/CD Workflow
 'on':
   push:
     branches:
@@ -10,43 +10,29 @@
     - main
     - master
     - develop
-    types:
-    - opened
-    - synchronize
-    - reopened
   workflow_dispatch: {}
-env:
-  NODE_OPTIONS: --max_old_space_size=4096
-  NPM_CONFIG_COLOR: always
-  NPM_CONFIG_LOGLEVEL: info
+
 jobs:
-  build-test-security:
+  test-and-verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      matrix:
-        node-version:
-        - 18.x
-        - 20.x
+    timeout-minutes: 10
+
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
-    - name: Setup Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
       with:
-        node-version: ${{ matrix.node-version }}
+        python-version: '3.11'
+        cache: 'pip' # Optimise la vitesse des lancements suivants
+
     - name: Install Dependencies
-      run: npm install --legacy-peer-deps
-    # L'étape Run Tests a été retirée ici car aucun script de test n'est présent dans package.json
-    - name: Run Build (if applicable)
-      id: build
-      run: npm run build
-    - name: Perform Security Audit
-      run: npm audit --audit-level=high
-    - name: Archive Production Build Artifacts (Optional)
-      uses: actions/upload-artifact@v4
-      with:
-        name: node-app-build-${{ github.sha }}-${{ matrix.node-version }}
-        path: dist
-        retention-days: 7
-      if: success() && steps.build.outcome == 'success'
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install pytest pytest-mock # Assure que pytest est disponible
+
+    - name: Run Python Tests
+      run: |
+        pytest tests/
