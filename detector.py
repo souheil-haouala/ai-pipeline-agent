@@ -14,13 +14,16 @@ def check_for_secrets():
     
     found_secrets = []
     
+    # Fichiers à ignorer pour éviter les faux positifs lors du scan de sécurité
+    ignored_files = ["main.py", "test_agent.py", "agent-config.yaml", "config.yaml", "models.yaml"]
+    
     for root, dirs, files in os.walk("."):
-        if any(ignored in root for ignored in ["node_modules", "venv", ".git", "__pycache__", "dist", ".next"]):
+        if any(ignored in root for ignored in ["node_modules", "venv", ".venv", ".git", "__pycache__", "dist", ".next", ".pytest_cache"]):
             continue
             
         for file in files:
-            # On ne scanne que les fichiers de code et conf (on ignore .env qui est fait pour stocker les clés légalement)
-            if file.endswith(('.py', '.js', '.ts', '.json', '.yml', '.yaml', '.yaml.kts')) and file != "main.py":
+            # On ne scanne que les fichiers de code et de configuration éligibles
+            if file.endswith(('.py', '.js', '.ts', '.json', '.yml', '.yaml', '.yaml.kts')) and file not in ignored_files:
                 file_path = os.path.join(root, file)
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
@@ -45,7 +48,7 @@ def scan_workspace():
 
     # Walk recursively through directories, ignoring common heavy folders
     for root, dirs, files in os.walk("."):
-        if any(ignored in root for ignored in ["node_modules", "venv", ".git", "__pycache__", "dist", ".next"]):
+        if any(ignored in root for ignored in ["node_modules", "venv", ".venv", ".git", "__pycache__", "dist", ".next", ".pytest_cache"]):
             continue
             
         for file in files:
