@@ -248,12 +248,8 @@ def main():
                 time.sleep(backoff_time)
             else:
                 time.sleep(1)
-                
-    if yaml_pipeline_result:
-        print_success("Orchestration Cycle Completed! Production-Ready YAML Compiled Successfully:")
-        print(Fore.WHITE + Style.NORMAL + yaml_pipeline_result)
-        
-            if yaml_pipeline_result:
+            
+        if   yaml_pipeline_result:
         print_success("Orchestration Cycle Completed! Production-Ready YAML Compiled Successfully:")
         print(Fore.WHITE + Style.NORMAL + yaml_pipeline_result)
         
