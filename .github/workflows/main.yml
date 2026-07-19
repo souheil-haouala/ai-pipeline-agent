@@ -25,14 +25,17 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        cache: 'pip' # Optimise la vitesse des lancements suivants
+        cache: 'pip'
 
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install pytest pytest-mock # Assure que pytest est disponible
+        pip install pytest pytest-mock
 
     - name: Run Python Tests
+      env:
+        # Clé d'API factice indispensable pour empêcher le script Python de planter au démarrage
+        GEMINI_API_KEY: "fake_key_for_testing_purposes_only"
       run: |
         pytest tests/
