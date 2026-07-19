@@ -253,24 +253,7 @@ def main():
         print_success("Orchestration Cycle Completed! Production-Ready YAML Compiled Successfully:")
         print(Fore.WHITE + Style.NORMAL + yaml_pipeline_result)
         
-        # Write output cleanly into a workflows repository path structure
-        output_dir = os.path.join(".github", "workflows")
-        os.makedirs(output_dir, exist_ok=True)
-        output_file = os.path.join(output_dir, "ci.yml")
-        
-        try:
-            with open(output_file, "w", encoding="utf-8") as out_handle:
-                out_handle.write(yaml_pipeline_result)
-                except Exception as exc:
-            print_warning(f"Attempt {attempt} hit a disruption block: {exc}")
-            if "RESOURCE_EXHAUSTED" in str(exc) or "429" in str(exc):
-                backoff_time = attempt * 5
-                print_warning(f"Rate-limit policy triggered. Intercepting and backing off for {backoff_time}s...")
-                time.sleep(backoff_time)
-            else:
-                time.sleep(1)
-                
-    if yaml_pipeline_result:
+            if yaml_pipeline_result:
         print_success("Orchestration Cycle Completed! Production-Ready YAML Compiled Successfully:")
         print(Fore.WHITE + Style.NORMAL + yaml_pipeline_result)
         
@@ -292,4 +275,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
