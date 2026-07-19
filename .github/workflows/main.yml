@@ -1,41 +1,57 @@
-﻿name: Python Application CI/CD Workflow
+name: Node.js CI/CD Workflow (npm)
 'on':
   push:
     branches:
     - main
-    - master
     - develop
   pull_request:
     branches:
     - main
-    - master
     - develop
+    types:
+    - opened
+    - synchronize
+    - reopened
   workflow_dispatch: {}
-
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+  actions: read
+  security-events: write
+env:
+  NODE_OPTIONS: --max-old-space-size=4096
 jobs:
-  test-and-verify:
+  build_and_test:
+    name: Build and Test Node.js App
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
+    strategy:
+      matrix:
+        node-version:
+        - 18.x
+        - 20.x
     steps:
-    - name: Checkout Code
+    - name: Checkout code
       uses: actions/checkout@v4
-
-    - name: Setup Python
-      uses: actions/setup-python@v5
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
       with:
-        python-version: '3.11'
-        cache: 'pip'
-
-    - name: Install Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install pytest pytest-mock
-
-    - name: Run Python Tests
-      env:
-        # Clé d'API factice indispensable pour empêcher le script Python de planter au démarrage
-        GEMINI_API_KEY: "fake_key_for_testing_purposes_only"
-      run: |
-        pytest tests/
+        node-version: ${{ matrix.node-version }}
+        cache: npm
+    - name: Install dependencies
+      run: npm ci
+    - name: Run linting
+      run: npm run lint
+    - name: Run tests
+      run: npm test
+    - name: Build application
+      id: build-step
+      run: npm run build
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: node-app-build-${{ matrix.node-version }}
+        path: dist/
+      if: success() && steps.build-step.outcome == 'success'
+    - name: Perform npm audit for vulnerabilities
+      run: npm audit --audit-level=moderate
