@@ -250,13 +250,13 @@ def main():
                 time.sleep(1)
             
         if   yaml_pipeline_result:
-        print_success("Orchestration Cycle Completed! Production-Ready YAML Compiled Successfully:")
-        print(Fore.WHITE + Style.NORMAL + yaml_pipeline_result)
+            print_success("Orchestration Cycle Completed! Production-Ready YAML Compiled Successfully:")
+            print(Fore.WHITE + Style.NORMAL + yaml_pipeline_result)
         
-        # Write output cleanly into a workflows repository path structure
-        output_dir = os.path.join(".github", "workflows")
-        os.makedirs(output_dir, exist_ok=True)
-        output_file = os.path.join(output_dir, "ci.yml")
+            # Write output cleanly into a workflows repository path structure
+            output_dir = os.path.join(".github", "workflows")
+            os.makedirs(output_dir, exist_ok=True)
+            output_file = os.path.join(output_dir, "ci.yml")
         
         try:
             with open(output_file, "w", encoding="utf-8") as out_handle:
