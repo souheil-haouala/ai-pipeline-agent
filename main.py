@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types  
 from jsonschema import validate, ValidationError
-from detector import scan_workspace
+from detector import scan_workspace, check_for_secrets
 
 # Initialize colorama for cross-platform color rendering
 init(autoreset=True)
@@ -169,6 +169,19 @@ def validate_and_convert_to_yaml(raw_json_text, client=None, model_name=DEFAULT_
 def main():
     load_dotenv()
     print_header()
+    
+    # --- PROACTIVE DEVSECOPS SECURITY SCAN ---
+    print_step("Running proactive DevSecOps static security audit")
+    detected_secrets = check_for_secrets()
+    if detected_secrets:
+        print_error("Security Breach Detected! Hardcoded tokens found in codebase:")
+        for secret in detected_secrets:
+            print(f"  -> {Fore.YELLOW}{secret}")
+        print_error("Orchestration lifecycle aborted to prevent remote token leakage.")
+        sys.exit(1)
+    else:
+        print_success("Security Audit Passed: No hardcoded secret tokens leaked in workspace")
+    # ------------------------------------------
     
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:

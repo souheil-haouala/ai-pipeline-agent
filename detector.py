@@ -1,5 +1,37 @@
 import os
 import json
+import re
+
+def check_for_secrets():
+    """
+    Scans code files in the workspace to detect hardcoded API keys or secrets
+    before passing data to external LLM endpoints.
+    """
+    secret_patterns = {
+        "Google Gemini API Key": r"AIzaSy[A-Za-z0-9_-]{33}",
+        "Generic Secret/Password": r'(?i)(password|secret|passwd|api_key|token)\s*=\s*["\'](?:[A-Za-z0-9_\-\.\!\@\#\$\%\^\&\*]){8,}["\']'
+    }
+    
+    found_secrets = []
+    
+    for root, dirs, files in os.walk("."):
+        if any(ignored in root for ignored in ["node_modules", "venv", ".git", "__pycache__", "dist", ".next"]):
+            continue
+            
+        for file in files:
+            # On ne scanne que les fichiers de code et conf (on ignore .env qui est fait pour stocker les clés légalement)
+            if file.endswith(('.py', '.js', '.ts', '.json', '.yml', '.yaml', '.yaml.kts')) and file != "main.py":
+                file_path = os.path.join(root, file)
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                        for name, pattern in secret_patterns.items():
+                            if re.search(pattern, content):
+                                found_secrets.append(f"{file_path} ({name})")
+                except Exception:
+                    pass
+                    
+    return found_secrets
 
 def scan_workspace():
     """
@@ -13,7 +45,6 @@ def scan_workspace():
 
     # Walk recursively through directories, ignoring common heavy folders
     for root, dirs, files in os.walk("."):
-        # Skip node_modules and virtual environments to save performance
         if any(ignored in root for ignored in ["node_modules", "venv", ".git", "__pycache__", "dist", ".next"]):
             continue
             
@@ -21,7 +52,6 @@ def scan_workspace():
             file_lower = file.lower()
             current_full_path = os.path.join(root, file)
             
-            # CORRECTION: Standardize depth assessment using path depth counts to prevent uneven string length bugs
             if file_lower not in found_files:
                 found_files[file_lower] = current_full_path
             else:
@@ -41,9 +71,7 @@ def scan_workspace():
         elif "yarn.lock" in found_files:
             build_tool = "yarn"
 
-        # Sauvegarde de la base de l'outil (npm, pnpm ou yarn) avant d'ajouter "run build"
         base_tool = build_tool
-
         package_json_path = found_files["package.json"]
         if os.path.exists(package_json_path):
             try:
@@ -62,7 +90,7 @@ def scan_workspace():
                     if "nuxt" in dependencies:
                         return {"stack": "Nuxt Framework", "build_tool": f"{base_tool} run build"}
             except Exception:
-                pass # Fallback to standard Node if JSON parsing crashes
+                pass
 
         return {"stack": "Node.js Application", "build_tool": base_tool}
 
