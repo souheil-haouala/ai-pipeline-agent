@@ -186,6 +186,7 @@ def main():
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         print_error("Missing GEMINI_API_KEY in environment or .env file.")
+        print_warning("Please initialize your workspace session with a valid token configuration.")
         sys.exit(1)
         
     config = load_model_config()
@@ -204,7 +205,11 @@ def main():
         print_success(f"Ecosystem Verified: {stack_name} via {build_tool}")
         
     print_step(f"Opening handshake socket connection to Google Gemini API ({model_name})")
-    client = genai.Client(api_key=api_key)
+    try:
+        client = genai.Client(api_key=api_key)
+    except Exception as init_err:
+        print_error(f"Failed to securely bind the Google GenAI client matrix: {init_err}")
+        sys.exit(1)
     
     prompt = f"""
     Generate a complete, enterprise-grade production-ready GitHub Actions workflow for a {stack_name} application using {build_tool}.
@@ -213,50 +218,78 @@ def main():
     """
     
     attempts = 3
-    raw_response_text = ""
+    yaml_pipeline_result = None
+    
     for attempt in range(1, attempts + 1):
         try:
             print_step(f"Executing schema conformance audit and generation (Attempt {attempt}/{attempts})")
             response = client.models.generate_content(
                 model=model_name,
                 contents=prompt,
-                config=types.GenerateContentConfig(response_mime_type="application/json")
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.2
+                )
             )
+            
             raw_response_text = response.text
-            break  
-        except Exception as err:
-            if "429" in str(err) or "RESOURCE_EXHAUSTED" in str(err):
-                print_warning(f"Rate limit reached (429). Waiting 15 seconds before retry...")
-                time.sleep(15)
+            if not raw_response_text:
+                raise ValueError("Received empty content payload from generation instance stream.")
+                
+            yaml_pipeline_result = validate_and_convert_to_yaml(raw_response_text, client=client, model_name=model_name)
+            if yaml_pipeline_result:
+                break
+                
+        except Exception as exc:
+            print_warning(f"Attempt {attempt} hit a disruption block: {exc}")
+            if "RESOURCE_EXHAUSTED" in str(exc) or "429" in str(exc):
+                backoff_time = attempt * 5
+                print_warning(f"Rate-limit policy triggered. Intercepting and backing off for {backoff_time}s...")
+                time.sleep(backoff_time)
             else:
-                print_error(f"Network request failed: {err}")
-                if attempt == attempts:
-                    sys.exit(1)
-                    
-    if not raw_response_text:
-        print_error("Failed to collect any payload back from the Gemini cluster.")
-        sys.exit(1)
+                time.sleep(1)
+                
+    if yaml_pipeline_result:
+        print_success("Orchestration Cycle Completed! Production-Ready YAML Compiled Successfully:")
+        print(Fore.WHITE + Style.NORMAL + yaml_pipeline_result)
         
-    print_step("Validating layout structure and converting to standard deployment YAML")
-    try:
-        final_yaml = validate_and_convert_to_yaml(raw_response_text, client=client, model_name=model_name)
-        print_success("Workflow configuration successfully generated, validated and healed!")
-        
-        # --- AUTOMATIC FILE SAVING CONFIGURATION ---
+        # Write output cleanly into a workflows repository path structure
         output_dir = os.path.join(".github", "workflows")
         os.makedirs(output_dir, exist_ok=True)
-        output_file_path = os.path.join(output_dir, "main.yml")
+        output_file = os.path.join(output_dir, "ci.yml")
         
-        with open(output_file_path, "w", encoding="utf-8") as out_file:
-            out_file.write(final_yaml)
-            
-        print_success(f"Pipeline automatically synced and deployed into: {output_file_path}")
-        print("\n" + Fore.WHITE + final_yaml)
+        try:
+            with open(output_file, "w", encoding="utf-8") as out_handle:
+                out_handle.write(yaml_pipeline_result)
+                except Exception as exc:
+            print_warning(f"Attempt {attempt} hit a disruption block: {exc}")
+            if "RESOURCE_EXHAUSTED" in str(exc) or "429" in str(exc):
+                backoff_time = attempt * 5
+                print_warning(f"Rate-limit policy triggered. Intercepting and backing off for {backoff_time}s...")
+                time.sleep(backoff_time)
+            else:
+                time.sleep(1)
+                
+    if yaml_pipeline_result:
+        print_success("Orchestration Cycle Completed! Production-Ready YAML Compiled Successfully:")
+        print(Fore.WHITE + Style.NORMAL + yaml_pipeline_result)
         
-    except Exception as validation_failure:
-        print_error(f"Execution pipeline interrupted due to unrecoverable structure: {validation_failure}")
+        # Write output cleanly into a workflows repository path structure
+        output_dir = os.path.join(".github", "workflows")
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, "ci.yml")
+        
+        try:
+            with open(output_file, "w", encoding="utf-8") as out_handle:
+                out_handle.write(yaml_pipeline_result)
+            print_success(f"Pipeline safely saved to standard output location: {output_file}")
+        except OSError as write_err:
+            print_error(f"Failed to dump generated metrics onto local disk storage tracks: {write_err}")
+    else:
+        print_error("Orchestration execution terminated: Unable to compile validated config schemas after maximum retries.")
         sys.exit(1)
 
 
 if __name__ == "__main__":
     main()
+
