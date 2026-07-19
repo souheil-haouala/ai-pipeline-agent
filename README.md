@@ -1,7 +1,5 @@
 # 🤖 Autonomous DevOps AI Pipeline Agent
 
-# 🤖 Autonomous DevOps AI Pipeline Agent
-
 ![Node.js CI/CD Workflow](https://github.com)
 
 An enterprise-grade, stack-agnostic AI DevOps orchestrator engine built for advanced Software Engineering automation.
