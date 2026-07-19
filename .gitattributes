@@ -1,0 +1,12 @@
+# Tell GitHub to ignore compiled distribution files from language stats
+dist/** linguist-vendored
+build/** linguist-vendored
+.venv/** linguist-vendored
+
+# Ignore testing suites and project configurations from inflating stats
+tests/** linguist-vendored
+package.json linguist-vendored
+requirements.txt linguist-vendored
+
+# Optional: If you have large documentation files, exclude them too
+docs/** linguist-documentation
