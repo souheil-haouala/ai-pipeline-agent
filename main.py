@@ -209,7 +209,7 @@ def main():
     prompt = f"""
     Generate a complete, enterprise-grade production-ready GitHub Actions workflow for a {stack_name} application using {build_tool}.
     Include steps for checking out code, setting up environments, installing dependencies, running tests, and basic build actions.
-    Return the response strictly inside a structural JSON object that matches the GitHub Actions metadata syntax format.
+    Return the response strictly inside a structural JSON object that matches the GitHub Actions metadata syntax format. No textual chatter outside JSON.
     """
     
     attempts = 3
@@ -223,7 +223,7 @@ def main():
                 config=types.GenerateContentConfig(response_mime_type="application/json")
             )
             raw_response_text = response.text
-            break  # Sortie de la boucle en cas de succès
+            break  
         except Exception as err:
             if "429" in str(err) or "RESOURCE_EXHAUSTED" in str(err):
                 print_warning(f"Rate limit reached (429). Waiting 15 seconds before retry...")
@@ -241,7 +241,18 @@ def main():
     try:
         final_yaml = validate_and_convert_to_yaml(raw_response_text, client=client, model_name=model_name)
         print_success("Workflow configuration successfully generated, validated and healed!")
+        
+        # --- AUTOMATIC FILE SAVING CONFIGURATION ---
+        output_dir = os.path.join(".github", "workflows")
+        os.makedirs(output_dir, exist_ok=True)
+        output_file_path = os.path.join(output_dir, "main.yml")
+        
+        with open(output_file_path, "w", encoding="utf-8") as out_file:
+            out_file.write(final_yaml)
+            
+        print_success(f"Pipeline automatically synced and deployed into: {output_file_path}")
         print("\n" + Fore.WHITE + final_yaml)
+        
     except Exception as validation_failure:
         print_error(f"Execution pipeline interrupted due to unrecoverable structure: {validation_failure}")
         sys.exit(1)
