@@ -45,6 +45,9 @@ def scan_workspace():
     
     found_files = {}
     has_python_files = False
+    
+    # Max file size constraint (10 MB) to prevent out-of-memory errors on bloat assets
+    MAX_MANIFEST_SIZE_BYTES = 10 * 1024 * 1024 
 
     # Walk recursively through directories, ignoring common heavy folders
     for root, dirs, files in os.walk("."):
@@ -54,6 +57,15 @@ def scan_workspace():
         for file in files:
             file_lower = file.lower()
             current_full_path = os.path.join(root, file)
+            
+            # --- ENTERPRISE GUARDRAIL: IGNORE BLOATED MANIFESTS ---
+            try:
+                if os.path.exists(current_full_path) and os.path.getsize(current_full_path) > MAX_MANIFEST_SIZE_BYTES:
+                    # Skip tracking entirely so it never reaches the found_files mapping dict
+                    continue
+            except OSError:
+                continue
+            # ------------------------------------------------------
             
             if file_lower not in found_files:
                 found_files[file_lower] = current_full_path

@@ -128,12 +128,14 @@ def print_warning(message):
 def validate_and_convert_to_yaml(raw_json_text, client=None, model_name=DEFAULT_MODEL_NAME):
     """Validates structural AI JSON output and converts it cleanly to standard YAML with Self-Healing."""
     try:
-        clean_text = raw_json_text.strip()
-        if clean_text.startswith("```json"):
-            clean_text = clean_text[7:]
-        if clean_text.endswith("```"):
-            clean_text = clean_text[:-3]
-        clean_text = clean_text.strip()
+        # Locate the first structural brace to fully bypass introductory chatter elements
+        start_index = raw_json_text.find('{')
+        end_index = raw_json_text.rfind('}')
+        
+        if start_index == -1 or end_index == -1:
+            raise json.JSONDecodeError("Valid structural JSON boundaries not discovered in response string payload.", raw_json_text, 0)
+            
+        clean_text = raw_json_text[start_index:end_index + 1].strip()
 
         parsed_json = json.loads(clean_text)
         validate(instance=parsed_json, schema=GITHUB_ACTIONS_SCHEMA)
@@ -164,7 +166,6 @@ def validate_and_convert_to_yaml(raw_json_text, client=None, model_name=DEFAULT_
                 raise healing_error
         else:
             raise e
-
 
 def main():
     load_dotenv()
@@ -249,14 +250,14 @@ def main():
             else:
                 time.sleep(1)
             
-        if   yaml_pipeline_result:
-            print_success("Orchestration Cycle Completed! Production-Ready YAML Compiled Successfully:")
-            print(Fore.WHITE + Style.NORMAL + yaml_pipeline_result)
+            if yaml_pipeline_result:
+                print_success("Orchestration Cycle Completed! Production-Ready YAML Compiled Successfully:")
+                print(Fore.WHITE + Style.NORMAL + yaml_pipeline_result)
         
-            # Write output cleanly into a workflows repository path structure
-            output_dir = os.path.join(".github", "workflows")
-            os.makedirs(output_dir, exist_ok=True)
-            output_file = os.path.join(output_dir, "ci.yml")
+        # Write output cleanly into a workflows repository path structure
+        output_dir = os.path.join(".github", "workflows")
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, "ci.yml")
         
         try:
             with open(output_file, "w", encoding="utf-8") as out_handle:
