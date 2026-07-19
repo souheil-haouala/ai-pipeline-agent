@@ -1,6 +1,7 @@
 import os
 import sys
 import yaml
+import json
 import time
 from colorama import init, Fore, Style
 from dotenv import load_dotenv
@@ -47,6 +48,64 @@ SUPPORTED_STACKS = {
     "Java/Kotlin": "gradle"
 }
 
+DEFAULT_MODEL_NAME = "gemini-2.5-flash"
+
+
+def load_model_config(config_path=None):
+    """Load model configuration from a YAML file if one is available."""
+    candidates = []
+    if config_path:
+        candidates.append(config_path)
+
+    env_path = os.environ.get("MODEL_CONFIG_PATH")
+    if env_path:
+        candidates.append(env_path)
+
+    candidates.extend([
+        "agent-config.yaml",
+        "models.yaml",
+        ".ai-pipeline-agent.yaml",
+        os.path.join(".github", "models.yaml"),
+    ])
+
+    seen_paths = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen_paths:
+            continue
+        seen_paths.add(candidate)
+
+        if not os.path.exists(candidate):
+            continue
+
+        try:
+            with open(candidate, "r", encoding="utf-8") as handle:
+                data = yaml.safe_load(handle) or {}
+            if isinstance(data, dict):
+                return data
+        except (OSError, yaml.YAMLError) as exc:
+            print_warning(f"Unable to load model config from {candidate}: {exc}")
+
+    return {}
+
+
+def resolve_generation_model(model_config):
+    """Select the preferred Gemini model from the loaded configuration."""
+    if not isinstance(model_config, dict):
+        return None
+
+    tab_model = model_config.get("tabAutocompleteModel")
+    if isinstance(tab_model, dict) and tab_model.get("provider") == "gemini":
+        return tab_model
+
+    models = model_config.get("models", [])
+    if isinstance(models, list):
+        for entry in models:
+            if isinstance(entry, dict) and entry.get("provider") == "gemini":
+                return entry
+
+    return None
+
+
 def print_header():
     """Renders a stylized corporate terminal panel header block."""
     print(Fore.CYAN + Style.BRIGHT + "=" * 65)
@@ -65,130 +124,122 @@ def print_error(message):
 def print_warning(message):
     print(f"{Fore.YELLOW}[{Fore.WHITE}!{Fore.YELLOW}] {Fore.YELLOW}{Style.BRIGHT}{message}")
 
-def validate_and_convert_to_yaml(raw_json_text):
-    """Validates structural AI JSON output and converts it cleanly to standard YAML."""
-    try:
-        parsed_data = yaml.safe_load(raw_json_text)
-        validate(instance=parsed_data, schema=GITHUB_ACTIONS_SCHEMA)
-        clean_yaml = yaml.dump(parsed_data, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        return clean_yaml
-    except (yaml.YAMLError, ValueError, TypeError) as e:
-        print_error(f"The AI generated invalid JSON/YAML structure: {e}")
-        return None
-    except ValidationError as e:
-        print_error(f"Invalid GitHub Actions structure: {e.message}")
-        return None
 
-def run_pipeline_agent():
-    print_header()
-    start_time = time.time()
-    
+def validate_and_convert_to_yaml(raw_json_text, client=None, model_name=DEFAULT_MODEL_NAME):
+    """Validates structural AI JSON output and converts it cleanly to standard YAML with Self-Healing."""
+    try:
+        clean_text = raw_json_text.strip()
+        if clean_text.startswith("```json"):
+            clean_text = clean_text[7:]
+        if clean_text.endswith("```"):
+            clean_text = clean_text[:-3]
+        clean_text = clean_text.strip()
+
+        parsed_json = json.loads(clean_text)
+        validate(instance=parsed_json, schema=GITHUB_ACTIONS_SCHEMA)
+        
+        yaml_output = yaml.dump(parsed_json, default_flow_style=False, sort_keys=False)
+        return yaml_output
+
+    except (json.JSONDecodeError, ValidationError) as e:
+        print_warning(f"Validation failed: {str(e)}")
+        if client:
+            print_step("Self-Healing Activated! Asking Gemini to fix the configuration structure")
+            healing_prompt = f"""
+            The previous output failed validation with the following error: {str(e)}
+            Here is the invalid payload:
+            {raw_json_text}
+            
+            Please fix the payload. Return ONLY a strictly compliant JSON object matching the GitHub Actions schema. No markdown wrapping.
+            """
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=healing_prompt,
+                    config=types.GenerateContentConfig(response_mime_type="application/json")
+                )
+                return validate_and_convert_to_yaml(response.text, client=None)
+            except Exception as healing_error:
+                print_error(f"Self-healing structural recovery failed: {healing_error}")
+                raise healing_error
+        else:
+            raise e
+
+
+def main():
     load_dotenv()
-    if not os.environ.get("GEMINI_API_KEY") and not os.environ.get("GITHUB_ACTIONS"):
-        print_error("Missing GEMINI_API_KEY inside your .env configuration schema file!")
+    print_header()
+    
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        print_error("Missing GEMINI_API_KEY in environment or .env file.")
         sys.exit(1)
         
+    config = load_model_config()
+    model_entry = resolve_generation_model(config)
+    model_name = model_entry.get("model", DEFAULT_MODEL_NAME) if model_entry else DEFAULT_MODEL_NAME
+    
     print_step("Analyzing workspace tree layer depth values recursively")
-    try:
-        scan_result = scan_workspace()
-        stack = scan_result["stack"]
-        build_tool = scan_result["build_tool"]
-    except Exception as e:
-        print_error(f"Workspace directory parsing sweep failed: {e}")
-        sys.exit(1)
-        
-    if stack == "Node.js Application" and build_tool in ["yarn", "pnpm"]:
-        stack = f"Node.js Application ({build_tool})"
-    elif stack in ["React Frontend", "Next.js Framework"] and ("yarn" in build_tool or "pnpm" in build_tool):
-        tool_name = build_tool.split()
-        stack = f"{stack} ({tool_name})"
-
-    if os.environ.get("GITHUB_ACTIONS") == "true":
-        print(f"\n{Fore.YELLOW}[i] Cloud Container Override Action: Mapping validation matrix constraints.")
-        stack = "Python"
-        build_tool = "pip"
-
-    if stack not in SUPPORTED_STACKS or SUPPORTED_STACKS[stack] != build_tool:
-        print_error(f"Security Blocker Intercepted: Stack='{stack}', Tool='{build_tool}'")
-        sys.exit(1)
-        
-    print_success(f"Ecosystem Verified: {stack} via {build_tool}")
+    ecosystem = scan_workspace()
     
-    max_retries = 3
-    retry_delay = 5  # Initial cooldown delay in seconds
-    raw_content = None
+    stack_name = ecosystem.get("stack", "Generic")
+    build_tool = ecosystem.get("build_tool", "unknown")
     
-    for attempt in range(1, max_retries + 1):
-        print_step(f"Opening handshake socket connection to Google Gemini API cluster (Attempt {attempt}/{max_retries})")
+    if stack_name not in SUPPORTED_STACKS:
+        print_warning(f"Detected stack '{stack_name}' is not in security allowlist. Proceeding with caution.")
+    else:
+        print_success(f"Ecosystem Verified: {stack_name} via {build_tool}")
+        
+    print_step(f"Opening handshake socket connection to Google Gemini API ({model_name})")
+    client = genai.Client(api_key=api_key)
+    
+    prompt = f"""
+    Generate a complete, enterprise-grade production-ready GitHub Actions workflow for a {stack_name} application using {build_tool}.
+    Include steps for checking out code, setting up environments, installing dependencies, running tests, and basic build actions.
+    Return the response strictly inside a structural JSON object that matches the GitHub Actions metadata syntax format.
+    """
+    
+    attempts = 3
+    raw_response_text = ""
+    for attempt in range(1, attempts + 1):
         try:
-            client = genai.Client()
-            config = types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.1
-            )
-            
-            prompt = (
-                "You are an expert DevOps engineer. Provide a valid GitHub Actions workflow schema formatted as a JSON object "
-                f"targeting a project built with {stack} using '{build_tool}'. "
-                "The JSON object MUST strictly use standard GitHub actions keys like 'name', 'on', and 'jobs'. "
-                "Ensure the jobs contain operational verification steps matching this ecosystem."
-            )
-            
+            print_step(f"Executing schema conformance audit and generation (Attempt {attempt}/{attempts})")
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                config=config,
+                model=model_name,
                 contents=prompt,
+                config=types.GenerateContentConfig(response_mime_type="application/json")
             )
-            raw_content = response.text
-            break  # Break out of the loop if successful!
-            
-        except Exception as e:
-            error_str = str(e)
-            # COOLDOWN PATCH: Handles both 429 quota exhaustion and 503 server overloads smoothly
-            if any(marker in error_str for marker in ["429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE"]):
-                if attempt < max_retries:
-                    print_warning(f"Network congestion or rate limit hit. Initiating automatic cooldown backoff...")
-                    # Stylized visual countdown loop in the console
-                    for remaining in range(retry_delay, 0, -1):
-                        sys.stdout.write(f"\r{Fore.YELLOW}[!] Retrying network operation in {remaining}s... ")
-                        sys.stdout.flush()
-                        time.sleep(1)
-                    print()  # Shift to a clean line break
-                    retry_delay *= 2  # Exponential backoff multiplier
-                    continue
-                else:
-                    print_error(f"API server thresholds or limitations reached after max retries: {e}")
-                    sys.exit(1)
+            raw_response_text = response.text
+            break
+        except Exception as err:
+            if "429" in str(err) or "RESOURCE_EXHAUSTED" in str(err):
+                print_warning(f"Rate limit hit (429). Retrying in 15 seconds...")
+                time.sleep(15)
             else:
-                print_error(f"Cloud server socket connection dropped: {e}")
-                sys.exit(1)
-                
-    if not raw_content:
-        print_error("Process terminated: Failed to collect execution parameters from the LLM.")
-        sys.exit(1)
-        
-    print_step("Executing schema conformance audit and structural formatting validation")
-    validated_yaml = validate_and_convert_to_yaml(raw_content)
-    
-    if not validated_yaml:
-        print_error("Process terminated: Output workflow layout configuration is corrupted.")
+                print_error(f"Network request failure: {err}")
+                if attempt == attempts:
+                    sys.exit(1)
+                    
+    if not raw_response_text:
+        print_error("Failed to fetch payload from Gemini cluster.")
         sys.exit(1)
         
     try:
-        os.makedirs(os.path.join(".github", "workflows"), exist_ok=True)
-        workflow_path = os.path.join(".github", "workflows", "main.yml")
-        with open(workflow_path, "w", encoding="utf-8") as f:
-            f.write(validated_yaml)
+        yaml_content = validate_and_convert_to_yaml(raw_response_text, client=client, model_name=model_name)
         
-        elapsed_time = time.time() - start_time
-        print(Fore.CYAN + "=" * 65)
-        print_success(f"CI/CD Pipeline compiled and saved successfully in {elapsed_time:.2f}s!")
-        print(f"{Fore.WHITE}Destination Path: {Fore.YELLOW}{workflow_path}")
-        print(Fore.CYAN + "=" * 65)
+        output_dir = os.path.join(".github", "workflows")
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, "main.yml")
         
-    except IOError as e:
-        print_error(f"Failed to record asset payload stream to disk: {e}")
+        with open(output_file, "w", encoding="utf-8") as out:
+            out.write(yaml_content)
+            
+        print_success(f"CI/CD Pipeline compiled and saved successfully!")
+        print(f"{Fore.CYAN}Destination Path: {Fore.WHITE}{Style.BRIGHT}{output_file}")
+        
+    except Exception as final_err:
+        print_error(f"Pipeline orchestration lifecycle failure: {final_err}")
         sys.exit(1)
 
 if __name__ == "__main__":
-    run_pipeline_agent()
+    main()
