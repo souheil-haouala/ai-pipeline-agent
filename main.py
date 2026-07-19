@@ -223,36 +223,29 @@ def main():
                 config=types.GenerateContentConfig(response_mime_type="application/json")
             )
             raw_response_text = response.text
-            break
+            break  # Sortie de la boucle en cas de succès
         except Exception as err:
             if "429" in str(err) or "RESOURCE_EXHAUSTED" in str(err):
-                print_warning(f"Rate limit hit (429). Retrying in 15 seconds...")
+                print_warning(f"Rate limit reached (429). Waiting 15 seconds before retry...")
                 time.sleep(15)
             else:
-                print_error(f"Network request failure: {err}")
+                print_error(f"Network request failed: {err}")
                 if attempt == attempts:
                     sys.exit(1)
                     
     if not raw_response_text:
-        print_error("Failed to fetch payload from Gemini cluster.")
+        print_error("Failed to collect any payload back from the Gemini cluster.")
         sys.exit(1)
         
+    print_step("Validating layout structure and converting to standard deployment YAML")
     try:
-        yaml_content = validate_and_convert_to_yaml(raw_response_text, client=client, model_name=model_name)
-        
-        output_dir = os.path.join(".github", "workflows")
-        os.makedirs(output_dir, exist_ok=True)
-        output_file = os.path.join(output_dir, "main.yml")
-        
-        with open(output_file, "w", encoding="utf-8") as out:
-            out.write(yaml_content)
-            
-        print_success(f"CI/CD Pipeline compiled and saved successfully!")
-        print(f"{Fore.CYAN}Destination Path: {Fore.WHITE}{Style.BRIGHT}{output_file}")
-        
-    except Exception as final_err:
-        print_error(f"Pipeline orchestration lifecycle failure: {final_err}")
+        final_yaml = validate_and_convert_to_yaml(raw_response_text, client=client, model_name=model_name)
+        print_success("Workflow configuration successfully generated, validated and healed!")
+        print("\n" + Fore.WHITE + final_yaml)
+    except Exception as validation_failure:
+        print_error(f"Execution pipeline interrupted due to unrecoverable structure: {validation_failure}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
