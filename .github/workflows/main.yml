@@ -37,8 +37,7 @@ jobs:
         node-version: ${{ matrix.node-version }}
     - name: Install Dependencies
       run: npm install --legacy-peer-deps
-    - name: Run Tests
-      run: npm test
+    # L'étape Run Tests a été retirée ici car aucun script de test n'est présent dans package.json
     - name: Run Build (if applicable)
       id: build
       run: npm run build
