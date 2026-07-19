@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -7,6 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from detector import scan_workspace
+from main import load_model_config
 
 class TestPipelineAgent(unittest.TestCase):
 
@@ -36,6 +38,30 @@ class TestPipelineAgent(unittest.TestCase):
         ]
         result = scan_workspace()
         self.assertIsInstance(result, dict)
+
+    def test_load_model_config_reads_yaml_file(self):
+        """Verify that YAML model configuration is parsed into a usable structure."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = os.path.join(temp_dir, 'agent-config.yaml')
+            with open(config_path, 'w', encoding='utf-8') as handle:
+                handle.write("""
+models:
+  - name: Gemini 2.5 Pro
+    provider: gemini
+    model: gemini-2.5-pro
+    apiKey: test-gemini-key
+
+tabAutocompleteModel:
+  name: Gemini 2.5 Flash
+  provider: gemini
+  model: gemini-2.5-flash
+  apiKey: test-flash-key
+""")
+
+            config = load_model_config(config_path)
+            self.assertIsInstance(config, dict)
+            self.assertEqual(config['models'][0]['model'], 'gemini-2.5-pro')
+            self.assertEqual(config['tabAutocompleteModel']['model'], 'gemini-2.5-flash')
 
 if __name__ == "__main__":
     unittest.main()

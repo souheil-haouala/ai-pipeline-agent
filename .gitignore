@@ -2,3 +2,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Fichiers de configuration contenant vos clés d'API
+agent-config.yaml
+config.yaml
