@@ -1,5 +1,6 @@
-name: Node.js CI/CD Workflow (npm)
-'on':
+﻿name: Python Enterprise Test Automation Suite
+
+on:
   push:
     branches:
     - main
@@ -13,45 +14,42 @@ name: Node.js CI/CD Workflow (npm)
     - synchronize
     - reopened
   workflow_dispatch: {}
+
 permissions:
   contents: read
   pull-requests: read
   checks: write
   actions: read
   security-events: write
-env:
-  NODE_OPTIONS: --max-old-space-size=4096
+
 jobs:
   build_and_test:
-    name: Build and Test Node.js App
+    name: Build and Test Python Agent
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version:
-        - 18.x
-        - 20.x
+        python-version:
+        - '3.11'
+        - '3.12'
+
     steps:
-    - name: Checkout code
+    - name: Checkout Repository Codebase
       uses: actions/checkout@v4
-    - name: Setup Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
+
+    - name: Set up Python ${{ matrix.python-version }} Environment
+      uses: actions/setup-python@v5
       with:
-        node-version: ${{ matrix.node-version }}
-        cache: npm
-    - name: Install dependencies
-      run: npm ci
-    - name: Run linting
-      run: npm run lint
-    - name: Run tests
-      run: npm test
-    - name: Build application
-      id: build-step
-      run: npm run build
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: node-app-build-${{ matrix.node-version }}
-        path: dist/
-      if: success() && steps.build-step.outcome == 'success'
-    - name: Perform npm audit for vulnerabilities
-      run: npm audit --audit-level=moderate
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install Pinned Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Run Test Suites with Pytest Validation
+      env:
+        # Prevents defensive token validation layers from aborting runtime environments
+        GEMINI_API_KEY: "mock_ci_placeholder_key"
+      run: |
+        python -m pytest
