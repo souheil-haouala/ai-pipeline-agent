@@ -1,0 +1,51 @@
+name: Python Enterprise Test Automation Suite
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+  actions: read
+  security-events: write
+
+jobs:
+  build_and_test:
+    name: Build and Test Python Agent
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python Environment
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Run Tests
+      env:
+        GEMINI_API_KEY: "mock_ci_placeholder_key"
+      run: |
+        if [ -f requirements.txt ]; then python -m pytest; fi
+
+    - name: Setup Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+        # No caching config here - completely bypasses the error
+
+    - name: Install Node Packages
+      run: |
+        if [ -f package.json ]; then npm install; fi
